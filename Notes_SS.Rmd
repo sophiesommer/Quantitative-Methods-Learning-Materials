@@ -1,0 +1,65 @@
+---
+title: "Notes: MSS, RSS, TSS and Degrees Freedom"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Remember that the residual sum of squares (RSS) is the sum of the squared distances between the predicted Y values and the regression line, the model sum of squares (MSS) is the sum of squared distances between the predicted Y values and the mean Y value, and the total sum of squares (TSS) is the sum of squared distances between the Y values and the mean Y value. Also remember that TSS=MSS+RSS:  
+```{r, echo=FALSE}
+X = c(1,2,3,4)
+Y = c(2,5,3,7)
+
+par(mfrow=c(2,3))
+plot(X, Y, main="RSS", pch=16)
+lm1 = lm(Y~X)
+abline(lm1, col=4, lwd=3)
+abline(h=mean(Y), col = 3, lwd=2, lty=2)
+segments(X[1], Y[1], X[1], predict(lm1)[1], col = 2, lwd=2)
+segments(X[2], Y[2], X[2], predict(lm1)[2], col = 2, lwd=2)
+segments(X[3], Y[3], X[3], predict(lm1)[3], col = 2, lwd=2)
+segments(X[4], Y[4], X[4], predict(lm1)[4], col = 2, lwd=2)
+legend("topleft", c("Regression line", "Mean of Y"), col=c(4,3), 
+       lty=c(1,2), lwd=2, cex=.7)
+
+plot(X, Y, main="MSS", pch=16)
+abline(lm1, col=4, lwd=3)
+abline(h=mean(Y), col = 3, lwd=2, lty=2)
+segments(X[1], predict(lm1)[1], X[1], mean(Y), col = 2, lwd=2)
+segments(X[2], predict(lm1)[2], X[2], mean(Y), col = 2, lwd=2)
+segments(X[3], predict(lm1)[3], X[3], mean(Y), col = 2, lwd=2)
+segments(X[4], predict(lm1)[4], X[4], mean(Y), col = 2, lwd=2)
+legend("topleft", c("Regression line", "Mean of Y"), col=c(4,3), 
+       lty=c(1,2), lwd=2, cex=.7)
+
+
+plot(X, Y, main="TSS", pch=16)
+abline(lm1, col=4, lwd=3)
+abline(h=mean(Y), col = 3, lwd=2, lty=2)
+segments(X[1], Y[1], X[1], mean(Y), col = 2, lwd=2)
+segments(X[2], Y[2], X[2], mean(Y), col = 2, lwd=2)
+segments(X[3], Y[3], X[3], mean(Y), col = 2, lwd=2)
+segments(X[4], Y[4], X[4], mean(Y), col = 2, lwd=2)
+legend("topleft", c("Regression line", "Mean of Y"), col=c(4,3), 
+       lty=c(1,2), lwd=2, cex=.7)
+```
+  
+The degrees of freedom for the MSS (i.e., model degrees of freedom) is equal to the number of predictors in the model (note: NOT the number of parameters; the model Y~X has one predictor, X, and two parameters, $\beta_0$ and $\beta_1$). The degrees freedom of the RSS (i.e., residual degrees of freedom) is equal to $n-1-p$ where $n$ is the number of observations (in the dataset that was used to fit the model) and p is the same. The degrees freedom of the TSS is equal to the sum of the degrees freedom of the MSS plus the degrees freedom of the RSS (i.e., $df(TSS)=df(MSS)+df(RSS)=p+n-1-p=n-1)$. So to summarize:      
+
+
+|      |DF        |
+|------|----------|
+|MSS   | p        | 
+|RSS   | n-1-p    |
+|TSS   | n-1      |
+
+
+For the data that I used to create the three plots above, there are 4 observations and I am fitting the model Y~X, so there is one predictor. Thus, $n=4$ and $p=1$. So the model degrees of freedom is $1$ and the residual degrees of freedom is $4-1-1=2$. The reported model degrees of freedom is highlighted in yellow below and the reported residual degrees of freedom is highlighted in green.   
+```{r, echo=FALSE}
+summary(lm1)
+```
+

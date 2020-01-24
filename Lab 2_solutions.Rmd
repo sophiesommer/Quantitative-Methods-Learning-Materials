@@ -1,0 +1,287 @@
+---
+title: "Lab 2"
+output: pdf_document
+---
+
+# Simple Linear Regression
+
+## Equations and Interpretations of Linear Regression
+
+First let's load some data to work with:
+We'll use the "gifted" dataset from the openintro package.The description for this dataset says:   
+  
+An investigator is interested in understanding the relationship, if any, between the analytical skills of young gifted children and the following variables: father's IQ, mother's IQ, age in month when the child first said ‘mummy’ or ‘daddy’, age in month when the child first counted to 10 successfully, average number of hours per week the child's mother or father reads to the child, average number of hours per week the child watched an educational program on TV during the past three months, average number of hours per week the child watched cartoons on TV during the past three months. The analytical skills are evaluated using a standard testing procedure, and the score on this test is used as the response variable.  
+  
+Data were collected from schools in a large city on a set of thirty-six children who were identified as gifted children soon after they reached the age of four.    
+
+```{r}
+# load the package
+require(openintro)
+
+# load the data
+data("gifted")
+
+# look at the first few rows
+head(gifted)
+
+# Run and save simple linear regression using lm()
+im <- lm(score ~ motheriq, data=gifted)
+```
+
+**Population Regression Model**
+
+**Conditional mean**  
+$\mu_Y = E[Y|X] = \beta_0 + \beta_1 X$  
+**Individual**  
+$Y_i = \beta_0 + \beta_1 X_i + \epsilon_i$, for $i=1,2,...,N$ with $\epsilon \sim N(0,\sigma^2)$
+
+Since we do not know the true values of $\beta_0$ and $\beta_1$, we estimate them from a sample and call our estimates $\hat{\beta_0}$ and $\hat{\beta_1}$. We compute these estimates using the ordinary least squares method. Using these estimated coefficients, we can also compute other estimates.
+
+**Estimated Regression Model from Sample**
+
+**Estimated conditional mean**  
+$\hat{Y}=estimated \text{ }E[Y|X]=\hat{\beta_0} + \hat{\beta_1} X$
+
+This is "the expectation of $Y$ given $X$" or "the expectation of $Y$ conditional on $X$." When we evaluate this model for a particular value of X, we are estimating the **average** value of dependent variable $Y$ for individuals with a certain value of independent variable $X$ in the population. Let's look at an example using last week's dataset.
+
+```{r}
+summary(im)
+```
+
+**Questions**
+
+1) What is our estimate of $\beta_0$ (that is, what value did we obtain for $\hat{\beta_0}$)? How do we interpret this value in terms of our variables of test score and mother's IQ?
+
+```{r}
+im$coefficients[1]
+```
+
+We expect mothers with an IQ of 0 to have children who score an **average** of 111 points on this test. The interpretation of the intercept coefficient often doesn't make much practical or realistic sense in context (e.g., age of 0, weight of 0, test score of 0).
+
+2) What is our estimate of $\beta_1$ (that is, what value did we obtain for $\hat{\beta_1}$)? How do we interpret this value in terms of our variables of test score and mother's IQ?
+
+```{r}
+im$coefficients[2]
+```
+
+For two groups of mothers whose average IQ differs by 1 point, we expect the mothers with higher IQs to have children whose **average** score on this test is about 0.4 points greater.
+
+3) According to our model, what is the average score we estimate for mothers with an IQ of 100 (that is, what is the estimate of $E[Y|X=100]$)?
+
+```{r}
+# Method 1
+im$coefficients[1] + im$coefficients[2]*100
+
+# Method 2
+predict(im, data.frame(motheriq=100))
+```
+
+151.75 points
+
+## Confidence Intervals and Predictions in R
+### Confidence Interval of Regression Coefficients
+```{r}
+confint(im, level = .99)
+# 95% is the default. Otherwise, adjust the level argument
+```
+
+### Confidence Interval of an Estimated Conditional Average, $\hat{Y}$
+```{r}
+predict(im, data.frame(motheriq=100), interval = "confidence")
+```
+
+### Prediction Interval (for a new individual data point)
+```{r}
+predict(im, data.frame(motheriq=100), interval = "prediction")
+```
+   
+Think about: Why is the prediction interval larger than the confidence interval?  
+
+### Centering, Standardizing, and Re-scaling Variables  
+Sometimes, we may want to center, standardize, or re-scale a variable in order to make the regression results more interpretable. The process for running the regression is the same as before, but now we have to be careful about the scale we use when interpreting the results.  
+
+
+First, let's center the motheriq variable:  
+```{r}
+# Center the motheriq variable, call this new variable motheriq0
+gifted$motheriq0 <- gifted$motheriq-mean(gifted$motheriq)
+
+# Re-run the regression with motheriq0
+im2 <- lm(score ~ motheriq0, data=gifted)
+summary(im2)
+```
+  
+Now, the interpretation of the intercept is: We expect mothers with average IQ in this sample to have children who earn an average score of 159.1 points on this test. The estimate for beta1 didn't change because centering does not affect the impact of the dependent variable on the independent variable. So the interpretation of beta1 stays the same.  
+  
+Next, let's standardize the motheriq variable so that every value of motheriq in the dataset is actually each mother's Z-score with respect to IQ (number of standard deviations that they are away from the mean).   
+```{r}
+# Standardize the motheriq variable, call this new variable motheriq_st
+gifted$motheriq_st <- gifted$motheriq0/sd(gifted$motheriq0)
+
+# Re-run the regression with motheriq_st
+im3 <- lm(score ~ motheriq_st, data=gifted)
+summary(im3)
+```
+  
+This doesn't change the interpretation of the intercept, but now we interpret beta1 as representing an expected change in *standard deviations*, not IQ points: For two groups of mothers whose average IQ differs by 1 *standard deviation*, we expect the mothers with higher IQs to have children whose **average** score on this test is about 2.6 points greater.   
+
+## Estimating beta0 and beta1 using matrices  
+
+### Reminders about creating/manipulating matrices in R  
+```{r}
+# R wants the data to be entered by columns starting with column one
+# 1st arg: c(2,3,-2,1,2,2) the values of the elements filling the columns
+# 2nd arg: 3 the number of rows
+# 3rd arg: 2 the number of columns
+
+A <- matrix(c(2,3,-2,1,2,2), 3, 2)
+A
+
+B <- matrix(c(2,-2,1,2,3,1), 2, 3)
+
+# Matrix multiplication 
+A %*% B
+
+# Transpose of a Matrix
+# Sometimes written as A' ("A prime")
+AT <- t(A)
+AT
+
+# Multiplying a matrix by its transpose produces a square matrix
+AAT <- A %*% AT
+dim(AAT)
+
+# Matrix Inverses
+C <- matrix(c(4,4,-2,2,6,2,2,8,4), 3, 3)
+CI <- solve(C)
+```
+  
+Estimated regression equation: $Y = XB$, where Y is a nx1 matrix of all the Y values, X is a nx2 matrix of a column of 1's and the X values, and B is a 2x1 matrix of beta_0 and beta_1.
+
+We can manipulate these matrices to have the equation solved for B:
+$B = (X'X)^{-1} (X'Y)$
+
+See this link for algebra:
+http://faculty.cas.usf.edu/mbrannick/regression/regma.htm
+
+```{r}
+Y <- as.matrix(gifted$score)
+X <- matrix(c(rep(1, nrow(gifted)), gifted$motheriq), nrow(gifted), 2)
+
+B <- solve(t(X) %*% X) %*% t(X) %*% Y
+B
+
+lin_mod <- lm(score ~ motheriq, data = gifted)
+lin_mod$coefficients
+```
+
+
+# Matrix algebra is extremely useful in solving for the coefficients in a multiple linear regression (more than one X variable).
+
+
+## More Useful Computational Functions in R
+
+### Mean, Variance, Covariance, and Correlation
+```{r}
+# Basic computations in R
+mean(gifted$motheriq)
+var(gifted$motheriq)
+cov(gifted$motheriq, gifted$score)
+cor(gifted$motheriq, gifted$score)
+```
+
+### Standard Error of Regression Coefficient
+```{r}
+# Variance-Covariance Matrix
+#variance of each and then covariance on diagonal
+vcov(im)
+
+# Standard error of beta_1
+summary(im)
+# Or
+sqrt(vcov(im)[2,2])
+```
+    
+# Practice  
+
+1. Download the "run10" dataset from the openintro package, which has info for participants in the 2012 Cherry Blosson run in DC. Run and inspect a summary of a linear regression of race time (DV) on age (IV).   
+```{r}
+data("run10")
+
+lm1 <- lm(time ~ age,data = run10)
+summary(lm1)
+```
+
+2. Calculate 95% confidence intervals around each of the regression coefficients.  
+
+```{r}
+confint(lm1)
+```
+
+3. Write a one sentence interpretation of the intercept and slope of this regression.  
+
+I would expect an age 0 person to run the race in 90.1 minutes on average (even though this makes no sense). People who are one year older have race times that are 0.13 minutes slower on average.
+
+4. Time is recorded in minutes in this dataset. Re-code the time variable so that it is in seconds and re-run the regression. Then re-interpret the coefficients.  
+
+```{r}
+run10$seconds <- run10$time*60
+
+lm2 <- lm(seconds ~ age, data = run10)
+summary(lm2)
+```
+
+5. Center the age variable and save this new variable as age0. Re-run the same regression and interpret the coefficients.   
+
+Here we find that there are NA's in the dataset. The function mean cannot handle this so we must include another arguement in the function called 'na.rm = TRUE'. This will remove all NA's from the column and then calculate the mean on the ages. 
+
+```{r}
+run10$age0 <- run10$age - mean(run10$age,na.rm = TRUE)
+
+lm3 <- lm(seconds ~ age0, data = run10)
+summary(lm3)
+```
+
+6. What is the expected average finishing time (in minutes) of a runner who is 30 years old? Provide a 95% confidence and prediction interval around your answer and provide an interpretation for each of those intervals (i.e., explain why they are different).  
+
+```{r}
+predict(lm3, data.frame(age0 = 30), interval = "confidence")
+
+predict(lm3, data.frame(age0 = 30), interval = "prediction")
+```  
+
+7. Show how you can use matrix multiplication to get the same result as you got from the linear model in question 1.   
+
+```{r}
+run10_new <- na.omit(run10)
+Y <- as.matrix(run10_new$time)
+X <- matrix(c(rep(1, nrow(run10_new)), run10_new$age), nrow(run10_new), 2)
+
+B <- solve(t(X) %*% X) %*% t(X) %*% Y
+B
+
+summary(lm1)$coef[,1]
+```
+
+8. Challenge: for the regression in question 1, plot the regression line, with additional lines around it showing the confidence interval. Hint: use type="n" for an initial scatter plot so that you can create an empty plot with the right dimensions. Then, use abline to plot the line.
+```{r}
+lm1 <- lm(time ~age, data=run10)
+plot(run10$age, run10$time, type="n", ylim=c(80, 120))
+abline(lm1)
+new_age=seq(min(run10$age, na.rm=T), max(run10$age, na.rm=T), by=1)
+bounds <- predict(lm1, data.frame(age=new_age), interval = "confidence")
+points(new_age, bounds[,2], type='l', col=3)
+points(new_age, bounds[,3], type='l', col=3)
+```
+
+
+
+
+
+
+
+
+
+
+
+

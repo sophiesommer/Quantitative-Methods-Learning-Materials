@@ -1,0 +1,180 @@
+---
+title: "Lab 8"
+output: pdf_document
+---
+
+This week, we'll start with a dataset from the 2012 US census. For now, we're going to focus on only three variables: income, gender, and education level. So, to make things simple, we'll subset the data to only include complete cases (no NAs) for these three variables.  
+```{r, message=FALSE}
+require("openintro")
+require("dplyr")
+data(acs12)
+
+#using some dplyr today! ...because, why not?!
+acs12 = acs12 %>% select(income, gender, edu) %>% na.omit()
+
+#note: this code would do the same as the dplyr code above:
+#acs12 = acs12[,c("income","gender","edu")]
+#acs12 = na.omit(acs12)
+```
+  
+Now, suppose that we want to use regression in order to estimate mean income by gender and education level. We will start by estimating these means directly, and then we can see how a regression model matches up (or doesn't).  
+```{r}
+#First, note that gender is a factor with 2 levels and edu is a factor with 3 levels
+str(acs12)
+
+#If they were numerics and we wanted to treat them as factors, we would have to use as.factor()
+# acs12$gender = as.factor(acs12$gender)
+
+#Look at factor variable levels
+levels(acs12$edu)
+levels(acs12$gender)
+
+#more dplyr!
+acs12 %>% group_by(gender, edu)  %>% summarize(grp_mean=mean(income))  
+
+#we can also look at box plots 
+grp = as.factor(paste0(acs12$gender,"-", acs12$edu))
+boxplot(split(acs12$income, grp), names=levels(grp), cex.axis=.7, ylim=c(0,3e+05))
+```
+      
+Now, lets fit an additive model, predicting income as a function of gender and ed level.  
+```{r}
+lm_add = lm(income ~ gender + edu, data=acs12)
+summary(lm_add)$coef
+```
+    
+How do we interpret these coefficients?  
+```{r}
+#intercept = estimated grp mean for the reference category groups
+#i.e., mean income when gender=male, edu=hs or lower
+summary(lm_add)$coef[1]
+
+#then, the coefficient for educollege is the difference in grp means 
+#for the college group as compared to the reference group
+#so to calculate mean income when gender=male and edu=college:
+summary(lm_add)$coef[1] + summary(lm_add)$coef[3]
+
+#to calculate mean income when gender=male and edu=grad:
+summary(lm_add)$coef[1] + summary(lm_add)$coef[4]
+
+#The coefficient on genderfemale is the mean difference when gender =female compared to gender=male
+#so to calculate grp means for gender = female and each of the college levels, we add this 
+#coefficient to each of the estimates above:
+
+#i.e., mean income when gender=female, edu=hs or lower
+summary(lm_add)$coef[1] + summary(lm_add)$coef[2]
+
+#to calculate mean income when gender=female and edu=college:
+summary(lm_add)$coef[1] + summary(lm_add)$coef[3] + summary(lm_add)$coef[2]
+
+#to calculate mean income when gender=female and edu=grad:
+summary(lm_add)$coef[1] + summary(lm_add)$coef[4] + summary(lm_add)$coef[2]
+```
+  
+Compare these estimates to the true group means. Why are they not the same? What assumptions did we make in this model?  
+```{r}
+acs12 %>% group_by(gender, edu)  %>% summarize(grp_mean=mean(income)) 
+```
+  
+Now, let's try the same thing, but interacting gender and edu:  
+```{r}
+lm_interact = lm(income ~ gender * edu, data=acs12)
+summary(lm_interact)$coef
+```
+
+  
+Now, let's estimate the same group means:  
+```{r}
+#to calculate mean income when gender=male and edu=hs or lower:
+summary(lm_interact)$coef[1]
+
+#to calculate mean income when gender=male and edu=college:
+summary(lm_interact)$coef[1] + summary(lm_interact)$coef[3]
+
+#to calculate mean income when gender=male and edu=grad:
+summary(lm_interact)$coef[1] + summary(lm_interact)$coef[4]
+
+#to calculate mean income when gender=female, edu=hs or lower
+summary(lm_interact)$coef[1] + summary(lm_interact)$coef[2]
+
+#to calculate mean income when gender=female and edu=college:
+summary(lm_interact)$coef[1] + summary(lm_interact)$coef[2] + 
+   summary(lm_interact)$coef[3] + summary(lm_interact)$coef[5]
+
+#to calculate mean income when gender=female and edu=grad:
+summary(lm_interact)$coef[1] + summary(lm_interact)$coef[2] + 
+   summary(lm_interact)$coef[4] + summary(lm_interact)$coef[6]
+```
+    
+Check this against the true group means:   
+```{r}
+acs12 %>% group_by(gender, edu)  %>% summarize(grp_mean=mean(income)) 
+```
+  
+Another way to do this:   
+Create a new group variable with all 6 combinations of gender/edu. Then run a regression on group as a factor variable. If you include "-1" in the equation, then you are telling R not to estimate the intercept and instead estimate group level expected means when all of the other factor levels are equal to 0. This directly estimates group means without using the interaction terms.  
+```{r}
+acs12$grp = paste0("-", acs12$gender, "-", acs12$edu)
+lm_allgrps = lm(income~as.factor(grp)-1, data=acs12)
+summary(lm_allgrps)$coef
+```
+    
+\pagebreak  
+#Practice  
+Lastly, let's look at a new dataset. We'll return to the ncbirths dataset, which includes data for 2000 births in North Carolina. It is also located in the openintro package.    
+```{r}
+data("ncbirths")
+```
+
+Try these questions on your own first; then we will discuss the answers together!   
+1. Plot the weight variable (y-axis) against the weeks variable (x axis). What do you think is the relationship between the number of weeks of pregnancy and expected weight of babies?  
+2. Fit a linear model of weight ~ weeks. Then fit a quadratic model of weight ~ weeks + weeks^2 and a cubic model of weight ~ weeks + weeks^2 + weeks^3. Superimpose the regression lines from each model onto the plot from question 1. Which looks like a better fit?  
+3. Test whether the cubic, quadratic, or linear model fits the data better using an F test.  
+4. Does it make sense to model log(weight) as a function of weeks? Why or why not? Try it and plot the regression line on top of the data. Comment on possible trajectories for lines plotted with this model.     
+
+
+\pagebreak    
+
+# Answers    
+
+1.  Plot the weight variable (y-axis) against the weeks variable (x axis). What do you think is the relationship between the number of weeks of pregnancy and expected weight of babies?    
+```{r}
+plot(ncbirths$weeks, ncbirths$weight, xlab="weeks", ylab="weight")
+```  
+It looks like expected score increases with motheriq, but then either decreases or levels off for large motheriq values.  
+
+2. Fit a linear model of weight ~ weeks. Then fit a quadratic model of weight ~ weeks + weeks^2 and a cubic model of weight ~ weeks + weeks^2 + weeks^3. Superimpose the regression lines from each model onto the plot from question 1. Which looks like a better fit?    
+```{r}
+linmod = lm(weight ~ weeks, data=ncbirths)
+quadmod = lm(weight ~ weeks + I(weeks^2), data=ncbirths)
+cubemod = lm(weight ~ weeks + I(weeks^2) + I(weeks^3), data=ncbirths)
+
+weeksindata = seq(min(ncbirths$weeks, na.rm=T), max(ncbirths$weeks, na.rm=T), 1)
+quadscores = predict(quadmod, newdata = data.frame(weeks = weeksindata))
+cubescores = predict(cubemod, newdata = data.frame(weeks = weeksindata))
+
+plot(ncbirths$weeks, ncbirths$weight, xlab="weeks", ylab="weight")
+abline(linmod, col=2, lwd=2)
+lines(weeksindata, quadscores, col=3, lwd=2)
+lines(weeksindata, cubescores, col=4, lwd=2)
+legend("topleft",c("linear", "quadratic", "cubic"), col=c(2,3,4), lty=1, lwd=2)
+```
+The quadratic model looks like it fits the model slightly better, and the cubic model looks even better.    
+
+3. Test whether the cubic, quadratic, or linear model fits the data better using an F test.  
+```{r}
+anova(linmod, quadmod, cubemod) #cubic is best
+```
+ 
+4. Does it make sense to model log(weight) as a function of weeks? Why or why not? Try it and plot the regression line on top of the data. Comment on possible trajectories for lines plotted with this model.      
+```{r}
+logmod = lm(I(log(weight)) ~ weeks, data=ncbirths)
+logweights = predict(logmod, newdata = data.frame(weeks = weeksindata))
+weight_preds = exp(logweights)
+
+plot(ncbirths$weeks, ncbirths$weight, xlab="weeks", ylab="weight")
+lines(weeksindata, weight_preds, col=2, lwd=3)
+```
+  
+If we model log weight as a function of weeks, we won't be able to capture this curve that seems to increase and then level out. The model log(weight) ~ weeks, assumes that that weight=exp(b0) * exp(b1)^weeks. Thus, for each additional week, baby weights are expected to be exp(b1) times higher. If exp(b1) is less than 1, then we're estimating that baby weights always decrease as the number of weeks increase, but by smaller and smaller amounts for each additional week. Conversely, if exp(b1) is greater than 1, we're estimating that baby weights are expected to increase by larger and larger amounts for every additional week. We can never model a relationship where the direction of the difference in expected baby weights for each additional week changes from positive to negative (or negative to positive); nor can we estimate a curve that increases and then levels out.    
+

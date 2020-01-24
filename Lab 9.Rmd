@@ -1,0 +1,71 @@
+---
+title: "Lab 9"
+output: pdf_document
+---
+```{r, message=FALSE}
+require("openintro")
+require("dplyr")
+```
+    
+For today, we'll start with the satGPA dataset in the openintro package, which includes data for 1000 students at an unnamed college. The variables are sex, SATV (Verbal SAT percentile), SATM (Math SAT percentile), SATSum (Total of verbal and math SAT percentiles), HSGPA (high school GPA), and FYGPA (first year of college GPA).  
+```{r}
+data(satGPA)
+str(satGPA)
+```
+   
+Suppose that we want to predict first year college GPAs using students' SAT scores and high school GPA. We also want to explore the relationship between SAT scores/HS GPAs and college GPAs. In order to build our model, we'll look at each covariate separately, then create an additive model (question: why am I not including SATSum in the model with all covariates? What would happen if I included it?):   
+```{r}
+lm_HSGPA = lm(FYGPA ~ HSGPA, data = satGPA)
+lm_SATM = lm(FYGPA ~ SATM, data = satGPA)
+lm_SATV = lm(FYGPA ~ SATV, data = satGPA)
+lm_all_vars = lm(FYGPA ~ HSGPA + SATM + SATV, data = satGPA)
+summary(lm_HSGPA)$coef
+summary(lm_SATM)$coef
+summary(lm_SATV)$coef
+summary(lm_all_vars)$coef
+```
+  
+What do you notice about the coefficients? For example, is the coefficient on HSGPA in the original model the same as the coefficient on HSGPA in the full additive model? ...No! Why might this be? Let's look at the correlations between these variables:  
+```{r}
+cor(satGPA$HSGPA, satGPA$SATV)
+cor(satGPA$HSGPA, satGPA$SATM)
+cor(satGPA$SATM, satGPA$SATV)
+```
+
+Pretend for a moment that you are reporting to your boss (maybe an admissions officer?), who wants to know how HS GPA is related to college GPA. If you didn't have SAT information, you would probably start with the first model:  
+```{r}
+plot(satGPA$HSGPA, satGPA$FYGPA, xlab="HS GPA", ylab="College GPA")
+abline(lm_HSGPA, lwd=2, col=4)
+```
+  
+Based on this plot and regression line, you would estimate that students with a 1 point higher GPA in High School are expected to have first year college GPAs that are 0.74 points higher on average.  
+
+However, if you got access to the SAT data, your conclusions would now change. Now you would report: Controlling for SAT scores, students with a 1 point higher GPA in High School are expected to have first year college GPAs that are 0.58 points higher on average.  
+
+This happens because all of these variables are positively correlated with each other. Once we include all three, they each account for less of the variation in first year college GPAs than any of them did on their own. This is important to keep in mind when interpreting regression coefficients. The coefficient on any particular variable may change, depending on what other variables are included in the model. And our coefficient estimates will be biased if our model is mispecified.  
+
+We can investigate this further via a Shiny App: https://a3sr.shinyapps.io/QM_Bias_Lab/   
+
+Just for fun, let's create a bunch of potential models for first year college GPA and compare them:  
+```{r}
+lm1 = lm(FYGPA ~ HSGPA, data = satGPA)
+lm2 = lm(FYGPA ~ HSGPA + SATM, data = satGPA)
+lm3 = lm(FYGPA ~ HSGPA + SATV, data = satGPA)
+lm4 = lm(FYGPA ~ HSGPA + SATM + SATV, data = satGPA)
+lm5 = lm(FYGPA ~ HSGPA + SATM + SATV + SATM * SATV, data = satGPA)
+lm6 = lm(FYGPA ~ HSGPA + SATM + SATV + SATM * SATV + I(HSGPA^2), data = satGPA)
+lm7 = lm(FYGPA ~ HSGPA * SATM * SATV, data = satGPA)
+lm8 = lm(FYGPA ~ HSGPA * SATM * SATV + I(HSGPA^2), data = satGPA)
+anova(lm1, lm2, lm3, lm4, lm5, lm6, lm7, lm8)
+```
+  
+
+# Data analysis  
+
+For the second part of this lab, we'll return to the 2012 US census dataset. To make things a little more manageable, I've provided some code to subset the data to a smaller number of variables.  
+```{r}
+data(acs12)
+acs12 = acs12 %>% select(income, gender, edu, age, employment, hrs_work, race) %>% na.omit()
+```
+   
+The goal for today is to come up with some potential models (make sure they are nested) for predicting income and compare them. Can you find the best model?? You should come up with at least 5 potential models. At least one of your models should include an interaction term and a higher order polynomial term.  

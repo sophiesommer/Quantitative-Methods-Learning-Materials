@@ -1,0 +1,297 @@
+---
+title: "Lab 7"
+output: pdf_document
+---
+
+# Harry Potter Revenue
+**Assume alpha level is 0.05 for all tests**
+
+## Models with polynomial terms
+
+We will examine revenue from Harry Potter films over the first ten weeks in theaters. First, we'll read in the data from a csv file.
+
+```{r}
+#Read in csv 
+harry <- read.csv('./Data/harrypotter.csv')
+```
+
+Take a look at the dataset use the View function or by clicking the dataframe icon next to 'harry' in your environment window. Now, let's plot revenue against week number to look at the shape of the relationship.
+
+
+```{r}
+# Initial plot
+plot(harry$weeknum, harry$revenue, xlab = "Week Number", ylab = "Revenue")
+
+# Improve interpretability of data by changing the units on revenue to dollars in millions
+# 1e6 means "1 * 10^6", or 1 million
+harry$revenue <- harry$revenue / 1e6
+
+# Plot again
+plot(harry$weeknum, harry$revenue, xlab = "Week Number", ylab = "Revenue (dollars in millions)")
+```
+
+This relationship appears curved. Let's try a simple linear model first. Then we can compare it to a linear model with a polynomial term.
+
+
+```{r}
+model_simple <- lm(revenue ~ weeknum, data = harry)
+summary(model_simple)
+
+# Take a look at a plot of the data with the fitted line
+plot(harry$weeknum, harry$revenue, 
+     xlab = "Week Number", ylab = "Revenue (dollars in millions)", 
+     xlim = c(1, 10), ylim = c(-50, 250))
+abline(model_simple)
+
+```
+
+According to this model, we expect revenue from Harry Potter movies to decrease by $_____ from week 4 to week 5 on average. 
+
+There are two ways we can answer this:
+```{r}
+# Option 1: Use coefficient from the model
+coef(model_simple)[2]
+
+# Option 2: Use the predict function
+rev_wk4and5 <- predict(model_simple, data.frame(weeknum = 4:5))
+rev_wk4and5
+diff(rev_wk4and5)
+```
+
+Let's see if we can improve our model by adding a quadratic term. There are two ways to specify the squared term.
+
+```{r}
+# Option 1: Use the I() function. This inhibits the interpretation of the "^" symbol as a formula operator.
+model_quad <- lm(revenue ~ weeknum + I(weeknum^2), data = harry)
+summary(model_quad)
+
+# Option 2: Create a new variable for the squared term first. Then enter into the model as usual.
+harry$weeknum2 <- (harry$weeknum)^2
+model_q2 <- lm(revenue ~ weeknum + weeknum2, data = harry)
+summary(model_q2)
+
+# Take a look at a plot of the data with the fitted line
+plot(harry$weeknum, harry$revenue, 
+     xlab = "Week Number", ylab = "Revenue (dollars in millions)",
+     xlim = c(1, 10), ylim = c(-50, 250))
+weeknums = c(1:10)
+revs <- predict(model_quad, data.frame(weeknum = 1:10))
+lines(weeknums, revs)
+```
+
+Let's try to answer the same question as before, but with our new model:  
+According to this model, we expect revenue from Harry Potter movies to decrease by $_____ from week 4 to week 5 on average.  
+
+This time we can't simply use the coefficient; its meaning is different because the squared term will also change as we increase week number. We must use the predict function here.
+
+```{r}
+rev_wk4and5_quad <- predict(model_quad, data.frame(weeknum = 4:5))
+rev_wk4and5_quad
+diff(rev_wk4and5_quad)
+```
+
+According to the quadratic model, at about what week do we expect the change in revenue to begin increasing from week to week?  
+
+```{r}
+### Using model_quad
+# Use the model to predict each week's revenue
+predict(model_quad, data.frame(weeknum = 1:10))
+# Check difference week-to-week
+diff(predict(model_quad, data.frame(weeknum = 1:10)))
+
+
+### Using model_q2 and squared term variable
+# Create dataframe of weeks 1-10 and their square
+newdata <- data.frame(weeknum = 1:10, weeknum2 = (1:10)^2)
+
+# Use the model to predict each week's revenue
+predict(model_q2, newdata)
+
+# Check difference week-to-week
+diff(predict(model_q2, newdata))
+
+```
+
+
+
+## F Tests
+Which model fits the data better? We can assess model fit using an F test. The F test is a way to compare nested models using the Residual Sum of Squares (RSS) of each model to compute an F ratio. R computes an F test every time you run the lm command. In this case, R compares your current model to a model with no independent variables (often called a null model). The null model just gives you the average outcome, so you're essentially comparing your fitted line to a horizontal line at the average outcome. This F test is sometimes called the "global F test" or "test of model significance." The null hypothesis of this test is that all the betas are zero. The alternative is that at least one is not zero. That is, we are testing all the beta coefficients jointly rather than individually.  
+
+```{r}
+# Create null model
+# Note that there's no F test at the bottom!
+model_null <- lm(revenue ~ 1, data = harry)
+summary(model_null)
+
+# Compare coefficient to mean revenue
+mean(harry$revenue)
+
+# Compare F test from output to F test of simple vs null
+summary(model_simple)
+anova(model_null, model_simple)
+```
+
+With the F test, model fit is a measured using RSS. This is simply a transformation of the residuals, or how much the predicted outcome differs from the true outcome at each point. The smaller the difference, the better the fit of the line to the data. Within the F statistic, the RSS of each model is compared. If the new model reduces the RSS without adding too many degrees of freedom, the F statistic may be large enough to reject the null that the models equally fit the data. Note that if your models differ by more than one term, you are testing if at least one of them improves the model (but not necessarily all of them are significant).
+
+
+```{r}
+# Compare simple with added quadratic term
+anova(model_simple, model_quad)
+
+```
+
+
+```{r}
+# Fitting a cubic term (just for fun!)
+model_cube <- lm(revenue ~ weeknum + I(weeknum^2) + I(weeknum^3), data = harry)
+summary(model_cube)
+
+plot(harry$weeknum, harry$revenue, 
+     xlab = "Week Number", ylab = "Revenue (dollars in millions)", 
+     xlim = c(1, 10), ylim = c(-50, 250))
+weeknums = c(1:10)
+revs <- predict(model_cube, data.frame(weeknum = 1:10))
+lines(weeknums, revs)
+
+anova(model_simple, model_quad, model_cube)
+```
+  
+## Another option: log transform  
+Note that revenue is mostly very small, with a few large outliers. By taking log(revenue), the distribution looks more normal and the relationship between revenue and week number looks more linear.  
+```{r}
+hist(harry$revenue, main="Revenue")
+harry$logrev = log(harry$revenue)
+hist(harry$logrev, main="Log Revenue")
+plot(harry$weeknum, harry$logrev, 
+     xlab = "Week Number", ylab = "Log Revenue (dollars in millions)", 
+     xlim = c(1, 10))
+```
+   
+We can now fit the model predicting log revenue. Remember that the model is now: 
+
+$$log(revenue) = \beta_0 + \beta_1 \cdot weeknum$$
+
+We can exponentiate both sides of this equation to get the following equation where the left side is then simply the revenue. 
+$$e^{\log(revenue)} = e^{\beta_0 + \beta_1 \cdot weeknum}$$
+$$revenue = e^{(\beta_0)} \cdot e^{(\beta_1 \cdot weeknum)}$$
+So, if we compare revenue at weeknum=x and weeknum=x+1, we get:  
+$$e^{\beta_0} \cdot e^{\beta_1 \cdot (x+1)} / e^{\beta_0} \cdot e^{\beta_1 \cdot x}= e^{\beta_1}$$  
+
+Therefore, we expect the revenue in a particular week to be $e^{\beta_1}$ times higher than in the previous week. And $e^{\beta_0}$ is now the expected revenue at week 0.  
+```{r}
+lm_logtrans = lm(logrev ~ weeknum, data = harry)
+summary(lm_logtrans)
+exp(lm_logtrans$coefficients[1]) #e^b0
+exp(lm_logtrans$coefficients[2]) #e^b1
+```
+
+
+## Wald test: NOTE: THIS IS NOT COVERED IN CLASS/HW, and is therefore optional  
+There are many types of Wald tests. Technically, all of the t tests on the coefficients are Wald tests. Also, the F test is directly related to the Wald test, as W = F*q, where q is the number of restrictions. As mentioned in the lecture slides, the Wald test using the W statistic and chi-square distribution is best with larger sample sizes. The Wald test using W has the advantage of only needing one model rather than two to compare.
+
+```{r}
+#install.packages("lmtest")
+require(lmtest)
+
+waldtest(model_quad,model_cube)
+```
+
+This wald test function tells us which of our models fit the data better and in this case, the model with the cubed term is the better model. 
+
+## Wald test matrix algebra
+
+```{r}
+# Subset to just the first three films
+harry_four <- harry[harry$film < 5, ]
+
+# Create dummy variables for film number
+harry_four$sorcerer <- as.numeric(harry_four$film == 1)
+harry_four$chamber <- as.numeric(harry_four$film == 2)
+harry_four$azkaban <- as.numeric(harry_four$film == 3)
+harry_four$goblet <- as.numeric(harry_four$film == 4)
+
+# Run linear model predicting revenue from film name dummy variables with sorcerer's stone as the reference group
+model_film <- lm(revenue ~ chamber + azkaban + goblet, data = harry_four)
+summary(model_film)
+
+```
+
+Construct a Wald test to test whether there is a statistically significant difference
+in revenue between azkaban and goblet films. Report the p-value for this
+test.  
+
+This is the same as asking, "does beta_azkaban = beta_goblet?" Further, we can subtract beta_goblet from both sides to get, "does beta_azkaban - beta_goblet = 0?"  
+
+Since exactly what we test with the Wald test changes in different contexts, we use the null hypothesis theta = 0, and we change what theta is (e.g. all the betas = 0, beta_1 - beta2 = 0, etc.). In this case, theta is beta_azkaban - beta_goblet. Now we use a matrix D multiplied by the betahats to express this. Then we compute W using the formulas from class.
+
+
+```{r}
+# Assign the coefficients from the model to betahat
+betahat <- coef(model_film)
+betahat
+
+# Create the D matrix as an empty matrix
+Dmat <- matrix(0, 1, ncol=4)
+
+# Fill D matrix so that when we multiply D by betahat we get azkaban - goblet, which is the third coefficient minus the fourth coefficient.
+Dmat[1,] <- c(0, 0, 1, -1)
+
+# Create thetahat from D times betahat
+thetahat <- Dmat %*% betahat
+thetahat
+
+# We need to find the covariance of thetahat
+theta.cov <- Dmat %*% vcov(model_film) %*% t(Dmat)
+theta.cov
+
+# Now we can get the W statistic
+W <- t(thetahat) %*% solve(theta.cov) %*% thetahat
+W
+
+# Now we compare our W to a chi-square distribution to see if it is unlikely to get a W of this value given a true null hypothesis. 
+pchisq(W, nrow(Dmat), lower.tail=FALSE)
+
+```
+
+We get a p-value of 0.819. This means that if the null is true (beta_azkaban = beta_goblet), the probability of obtaining a W at least as extreme as our W of 0.052 is about 81.9%. This means our W seems very likely given the null is true, so we fail to reject the null. We do not have evidence that there is a statistically significant difference in revenue between the azkaban and goblet films at the 5% significance level.
+
+```{r}
+# Compare F to W testing if all betas equal 0 for film name
+Dmat <- matrix(0, 3, 4)
+
+# Fill D matrix so that when we multiply D by betahat we get azkaban - goblet, which is the third coefficient minus the fourth coefficient.
+Dmat[1,] <- c(0, 1, 0, 0)
+Dmat[2,] <- c(0, 0, 1, 0)
+Dmat[3,] <- c(0, 0, 0, 1)
+
+# Create thetahat from D times betahat
+thetahat <- Dmat %*% betahat
+thetahat
+
+# We need to find the covariance of thetahat
+theta.cov <- Dmat %*% vcov(model_film) %*% t(Dmat)
+theta.cov
+
+# Now we can get the W statistic
+W <- t(thetahat) %*% solve(theta.cov) %*% thetahat
+W
+
+# Now we compare our W to a chi-square distribution to see if it is unlikely to get a W of this value given a true null hypothesis. 
+pchisq(W, nrow(Dmat), lower.tail=FALSE)
+
+# The F statistic from earlier
+Fstat <- summary(model_film)$fstatistic[1]
+
+# Check if F*3 equals W. By adding 3 coefficients to the model, we added 3 restrictions (q = 3).
+Fstat
+Fstat*3
+W
+```
+
+
+
+
+
+
+
+

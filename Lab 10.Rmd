@@ -1,0 +1,173 @@
+---
+title: "Lab 10"
+output: pdf_document
+---
+
+# Regression selection and interpretation with airquality data
+
+Load in the airquality dataset, which has daily air quality measurements in New York, from May to September 1973. You can find more information on each variable by typing ?airquality
+
+```{r, message=FALSE}
+# Load car package
+require(car)
+
+# Load airquality data frame from datasets package
+airquality <- datasets::airquality
+
+# Subset to only complete cases and name new dataset air
+air <- na.omit(airquality)
+```
+
+Build a model with just temperature (Temp) predicting ozone.  
+
+```{r}
+model_temp <- lm(Ozone ~ Temp, data = air)
+summary(model_temp)
+```
+
+
+Now, build an additive linear model predicting Ozone from Solar.R, Wind, Temp, Month, and Day.
+
+```{r}
+model_full <- lm(Ozone ~ Solar.R + Wind + Temp + Month + Day, data = air)
+summary(model_full)
+```
+  
+*How did the coefficient on Temp change?*
+
+*Why do you think this change occured?*
+
+*In the full model, how do we interpret the coefficient on Temp?*
+
+*In the original model, how do we interpret the coefficient on Temp?*
+
+
+# Regression with standardized coefficients   
+Let's use the function lm.beta (from the lm.beta package) to get the standardized coefficients of the full model.
+
+```{r}
+library(lm.beta) # Install if you don't already have this package
+lm.beta(model_full)
+```
+  
+
+*How do we interpret these coefficients?*
+
+*How is this helpful to us?*
+
+*Which variable has the largest effect on Ozone?*
+
+
+
+# Model selection methods  
+Up to this point, you have learned to do an F test comparing nested models using the anova command in R. Below, we will discuss some other methods for model selection. But first, let's build a bunch of potential models! 
+
+```{r}
+m1 <- lm(Ozone ~ Temp, data = air)
+m2 <- lm(Ozone ~ Wind + Temp, data = air)
+m3 <- lm(Ozone ~ Wind + Temp + Solar.R, data = air)
+m4 <- lm(Ozone ~ Wind + Temp + Solar.R + Month, data = air)
+m5 <- lm(Ozone ~ Wind + Temp + Solar.R + Month + Day, data = air)
+m6 <- lm(Ozone ~ Wind * Temp + Solar.R + Month + Day, data = air)
+m7 <- lm(Ozone ~ Wind * Temp + Wind * Solar.R + Month + Day, data = air)
+m8 <- lm(Ozone ~ Wind * Temp + Wind * Solar.R + Temp * Solar.R + Month + Day, data = air)
+m9 <- lm(Ozone ~ Wind * Temp * Solar.R + Month + Day, data = air)
+m10 <- lm(Ozone ~ Wind * Temp * Solar.R * Month * Day, data = air)
+```
+  
+You've learned about R squared as a measurement of the proportion of variation in the outcome variable which can be explained by the model. You might say that a model is better if it explains more variation Y. Let's first compare the model R squares of all of these models:  
+```{r}
+# save the models
+models = list(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
+
+# how many predictors in each model?  
+ps = unlist(lapply(models, function(x) {nrow(summary(x)$coef)-1}))
+ps
+
+# r squares of each model: 
+rsquares = unlist(lapply(models, function(x) {summary(x)$r.squared}))
+rsquares
+which.max(rsquares) #which is largest
+```
+  
+
+*What do you notice about the R squares? Do they ever decrease after adding another predictor?*
+
+*where are the biggest jumps in R squares; where are there negligible differences?*  
+
+*Which model would you choose?*  
+
+Now, let's compute the adjusted R squares. Adjusted R squared is similar to R squared, except that there is a penalty for adding additional parameters. Therefore, if adding a parameter does not increase the R squared sufficiently enough to "warrant" another loss of degrees freedom, adjusted R squared could decrease:   
+```{r}
+# r squares of each model: 
+adj.rsquares = unlist(lapply(models, function(x) {summary(x)$adj.r.squared}))
+adj.rsquares
+which.max(adj.rsquares) #which is largest?
+```
+    
+
+*How are the adjusted R squares different from or similar to the regular R squares?*  
+
+*Which model would you choose using adjusted R squares?*   
+
+Log likelihood is another potential criterion we could use. Likelihood is essentially the probability of a set of data given a particular model. Log likelihood is exactly as it sounds: log of the likelihood (note: as likelihood increases, log likelihood also increases). Thus, sometimes people do model selection (or parameter estimation) by trying to maximize likelhood or log likelihood. Let's calculate log likelihood of each model:  
+```{r, message=FALSE}
+require(stats) #load stats package
+
+# r squares of each model: 
+loglikes = unlist(lapply(models, logLik))
+loglikes
+which.max(loglikes) #which is largest
+```
+  
+
+*Does log likelihood every decrease when we add more parameters?*  
+
+*Which model would you choose using log likelihood?*   
+
+
+Similar to how adjusted R squared penalizes the R squared for additional parameters, we can also use criteria that penalize the log likelihood for adding additional parameters. The most commonly used are Akaike's Information Criterion (AIC) and Bayesian Information Criterion (BIC). $AIC = -2*logL + 2*p$, $BIC = -2*logL + p*log(n)$ where LogL is log likelihood, p is the number of parameters, and n is the sample size. By multiplying LogL by a negative number and then adding for each additional parameter, we make it so that smaller AIC or BIC indicates higher log likelihood and/or fewer parameters. BIC should only be used when n is much larger than p; thus, BIC is generally more conservative than AIC (i.e., we penalize each additional parameter more in BIC than AIC).    
+
+Let's use BIC and AIC to choose models:  
+```{r}
+#AIC
+AICs = unlist(lapply(models, AIC))
+AICs
+which.min(AICs) #which is smallest?
+
+#BIC
+BICs = unlist(lapply(models, BIC))
+BICs
+which.min(BICs) #which is smallest?
+```
+  
+  
+
+*Which model does AIC choose?*  
+
+*Which model does BIC choose?*   
+
+What about all of the other possible models between 1 and 10 which we didn't compare? We can also use a stepwise procedure to ask R to compare all possible models up to some largest possible model, using a particular criterion (i.e., AIC or BIC). We can work step-wise starting from the smallest model and adding additional terms one at a time, or we can start with the largest possible model and delete terms one at a time. There's also an option to move in "both" directions, adding or subtracting terms as we go.     
+```{r, message=FALSE}
+require(MASS)
+
+#forward:
+summary(stepAIC(m1, list(lower=m1, upper=m10), direction = "forward"))
+```
+
+  
+```{r}
+#backward:
+summary(stepAIC(m10, list(lower=m1, upper=m10), direction = "backward"))
+```
+    
+
+```{r}
+#both:
+summary(stepAIC(m1, list(lower=m1, upper=m10), direction = "both"))
+```
+
+
+
+
+

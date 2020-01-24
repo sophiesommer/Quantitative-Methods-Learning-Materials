@@ -1,0 +1,125 @@
+---
+title: "Lab 6"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First, let's re-download the data from last week. Remember that this data includes a sample of people who ran the Cherry Blossom 10 miler in 2010.  
+```{r, message=FALSE}
+require(openintro)
+data("run10Samp")
+```
+
+       
+Last week, we ran a regression of time (DV) on age (IV) and gender (IV), where gender was a categorical variable with two possible values: male or female. This produced two lines showing the relationship between time and age for males and females, where the lines were allowed to have different intercepts:  
+```{r}
+lm1 = lm(time ~ age + gender, data=run10Samp)
+summary(lm1)
+plot(run10Samp$age, run10Samp$time, col=as.numeric(run10Samp$gender))
+legend("topright", c("Female", "Male"), col=c(1,2), pch=1)
+abline(summary(lm1)$coef[1], summary(lm1)$coef[2])
+abline(summary(lm1)$coef[1] + summary(lm1)$coef[3], summary(lm1)$coef[2], col=2)
+```
+   
+Now suppose that we want to allow these lines to have different slopes. We can add an interaction term between gender and age as follows. The model is now $time = \beta_0 + \beta_1*age + \beta_2*gender + \beta_3*age*gender$. In the output, the coefficient for beta_3 is shown as age:genderM. Note that $age*gender$ does the same thing as writing out the full functional form.  
+```{r}
+lm2 = lm(time ~ age * gender, data=run10Samp)
+summary(lm2)
+
+#same thing
+lm3 = lm(time ~ age + gender + age*gender, data=run10Samp)
+summary(lm3)
+```
+  
+Now let's think about the lines that we get when male = 0 vs. male = 1. When male=0, the line is $time = 110.96 -.26*age -19.72*genderM + .16*age*genderM = 110.96 -.26*age$. Now, when male=1, the line is $time = 110.96 -.26*age -19.72*genderM + .16*age*genderM = 110.96 -.26*age -19.72*1 + .16*age*1=(110.96-19.72) + (-.26+.16)*age$. We can graph this as follows (note that the lines for male and female have different intercepts AND different slopes now):  
+```{r}
+plot(run10Samp$age, run10Samp$time, col=as.numeric(run10Samp$gender))
+legend("topright", c("Female", "Male"), col=c(1,2), pch=1)
+abline(summary(lm2)$coef[1], summary(lm2)$coef[2])
+abline(summary(lm2)$coef[1] + summary(lm2)$coef[3], summary(lm2)$coef[2]+summary(lm2)$coef[4], col=2)
+```
+   
+We can also use the margins package to look at the marginal (i.e., average) "effect" (i.e., coefficient on) of age when gender=M and gender=F. The values in the age column are just what we calculated for the slopes of the lines above. The values in the genderF column are the average coefficients for "genderF" across all ages in the dataset.    
+```{r, message=FALSE}
+#install.packages("margins")
+require(margins)
+margins(lm2, at = list(gender = c("M", "F")))
+
+#this is where those values for genderF are coming from:
+-summary(lm2)$coef[3]-(summary(lm2)$coef[4]*mean(run10Samp$age))
+```
+
+We can also add interaction terms between continuous variables, but then we essentially get infinitely many lines.   
+Lets load the diamonds dataset from ggplot2, which has information for diamond prices and various characteristics. We can estimate price by regressing on carat, depth, and an interaction between carat and depth.      
+```{r, message=FALSE}
+require(ggplot2)
+data(diamonds)
+lm_diamonds = lm(price ~ carat * depth, data=diamonds)
+summary(lm_diamonds)
+```
+  
+Now, if we want to visualize the relationship between these variables, it is harder because we used two continuous covariates. But, we could show the relationship between carat and price for different depths (note: think about how we could derive the equations for these lines: just plug in the given value for depth!):  
+```{r}
+carats = seq(min(diamonds$carat), max(diamonds$carat), .05)
+preds_50 = predict(lm_diamonds, data.frame(depth = rep(50,length(carats)), carat=carats))
+preds_70 = predict(lm_diamonds, data.frame(depth = rep(70,length(carats)), carat=carats))
+plot(diamonds$carat, diamonds$price, xlim=c(0,4))
+lines(carats, preds_50, col=2, lwd=2)
+lines(carats, preds_70, col=4, lwd=2)
+legend("bottomright", c("depth=50", "depth=70"), col=c(2,4), lty=1, lwd=2)
+```
+     
+We can also use margins to calculate average coefficients across all possible values of the other covariates
+```{r, message=FALSE}
+margins(lm_diamonds)
+
+#how we can get these values by hand:
+summary(lm_diamonds)$coef[2]+summary(lm_diamonds)$coef[4]*mean(diamonds$depth)
+summary(lm_diamonds)$coef[3]+summary(lm_diamonds)$coef[4]*mean(diamonds$carat)
+```
+  
+Finally, let's talk about what happens when we include categorical variables in a regression that have more than two categories.  
+
+Lets start with a simple linear model with one continuous and one categorical variable. In this case we will use the predictor 'x' and the cut to predict price. Let us first take a look at the cut column:
+
+```{r}
+class(diamonds$cut) = "factor"
+levels(diamonds$cut)
+```
+
+Here we can see that there are 5 levels to this variable in some order. The first one in the output is "Fair". This tells use that R will read this group as the reference group.  
+
+Why do we need a reference category?
+Remember that to find the beta hats using matrix algebra, we'll need to multiply the transpose of the X matrix with the X matrix, and then we need to take the inverse of this square matrix. (note: the matrix below is basically how this gets coded in R when you run the linear regression)
+
+```{r}
+lm_diamonds2 = lm(price~cut, data=diamonds)
+stats::model.matrix(lm_diamonds2)[1:5,]
+```
+
+
+If we add in the reference group, our matrix columns are no longer linearly independent, which means the matrix is not full rank. We cannot take the inverse of a matrix that is not full rank, so we won't be able to solve for the beta hats.  
+
+If we regress price on cut we get the following output:  
+```{r}
+lm_diamonds2 = lm(price~cut, data=diamonds)
+summary(lm_diamonds2)
+```
+   
+The intercept represents the mean price of diamonds with cut=fair. All of the other categories basically became their own binary variable, and the coefficient on each one now represents the difference in average price between cut=Fair and the given category.   
+
+Challenge to discuss: what if we include an interaction between cut and carat. Now how do we interpret all these coefficients? Try writing out the equation (we'll do this on the board).  
+```{r}
+lm_diamonds3 = lm(price~cut*carat, data=diamonds)
+summary(lm_diamonds3)
+```
+
+
+
+
+

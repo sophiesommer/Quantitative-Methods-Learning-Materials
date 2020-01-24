@@ -1,0 +1,203 @@
+---
+title: "Lab 11"
+output: pdf_document
+---
+
+# Model Selection and Prediction
+
+In this lab, we will run a simulation to see if forward stepwise AIC finds the "true" model of a fake dataset that we generate. Then we will use two other methods for model selection, which focus on out-of-sample prediction, rather than likelihood or variance explained in Y. The measures we will use to compare the models with respect to prediction are the root mean square error (RMSE) from a 10-fold cross-validation and the predicted root mean square error (PRMSE) from a validation set that we will subset from our generated data before running potential models.
+
+First, we will generate some fake data and store it in a matrix.  
+
+## Initial setup
+We are going to generate 500 observations of 8 X variables and one Y variable, so we'll start by creating an empty matrix with 500 rows and 9 columns.  
+
+```{r, message=FALSE}
+# Load required libraries: MASS for stepAIC; caret for train and trainControl
+library(MASS)
+library(caret)
+
+# Set the seed because we are generating random data
+set.seed(123)
+
+# Set number of observations
+n <- 500
+
+# Create a 500x9 matrix filled with zeros called "data"
+# The rows will be observations and the columns will be variables (8 X's and 1 Y)
+###FILL IN CODE HERE###
+```
+
+## Generating the X variables
+Now that we have a place to store our data, we can generate each variable. All of our independent variables (X's) will come from a normal distribution with mean 1 and standard deviation 2.     
+
+```{r}
+# Loop through the numbers 1 through 8
+# In each iteration, draw 500 values from a normal distribution of mean 1 and standard deviation 2
+# Store each set of 500 values as a separate column in "data"
+for (j in 1:8) {
+  data[,j] <- rnorm(n, 1, 2)
+}
+
+# Change the matrix into a data frame
+data <- data.frame(data)
+
+# Rename the X variables X1-X8, and the last column Y (still just zeros)
+# The paste0() function puts together "X" and one of the numbers, with no space separating
+# So "X" and "1" become "X1", etc.
+names(data) <- c(paste0("X", 1:8), "Y")
+```
+
+## Generate the outcome variable, Y
+Now that we have 8 independent variables, we can generate the outcome variable Y. Since we are creating this data, we know the true relationship of the X variables to Y--we are the ones deciding that relationship! 
+
+There are two things we want to accomplish here:  
+  (1) We want Y to have some kind of linear relationship with some (but maybe not all) of the X's.  
+  (2) We want Y to look a little messy, like real data does. Most of the time data do not show a perfect linear relationship. There's "noise" in the data caused by random error.  
+  
+To accomplish these goals we will first generate Y as a linear combination of the first 4 X variables (exclude X5, X6, X7, and X8). Then we add "noise" by adding random error to Y, drawn from a normal distribution of mean 0 and standard deviation 1.5.
+
+```{r}
+# Generate the values for the outcome variable Y (i.e., data$Y) using some of the X variables
+# Use the formula 3 + 2*X1 + 1.5*X2 + -1*X3 + -1.5*X4
+ 
+data$Y <- 3 + 2*data$X1 + 1.5*data$X2 + -1*data$X3 + -1.5*data$X4
+
+# Add some "noise" to the Y variable by adding error terms that are N(0,1.5)
+
+data$Y <- data$Y +rnorm(n, 0, 1.5)
+```  
+
+
+## Run regression of "true" formula and stepwise AIC
+Next, we run a regression using the true formula: Y regressed on the X variables 1-4. These were the variables used to generate Y, so we know they are the only ones that really belong in the regression line equation. We can compare this to a model with all of the covariates:    
+
+```{r}
+# Regression using "true" formula. Save the output of lm as true_model
+true_model <- lm(Y ~ X1 + X2 + X3 + X4, data=data)
+summary(true_model)
+# Regression using the full model (all variables). Save the output of lm as full_model
+full_model <- lm(Y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8, data=data)
+full_model <- lm(Y ~ ., data=data) # another option that does the same
+summary(full_model)
+```
+  
+Now, we will use forward stepwise AIC to fit a model on the data. Here we are pretending we do not know the true formula for modeling Y. When the direction is set to forward, stepAIC starts with an intercept only model, then it tries out all models of just one variable (8), and it keeps the one with the lowest AIC (provided it is lower than the intercept-only model). From there it tests adding a second variable to the model and picks the second variable that most lowers the AIC. This continues until adding variables no longer improves the model.  
+
+Backward stepwise AIC uses the same idea, but starts with the full model (all variables) and deletes them one at a time rather than adding them in. Using one direction or the other can produce different models as the "best" fit. 
+
+**NOTE:** For backward stepwise AIC, we would not need the scope argument; just enter the full model and set the direction to "backward."  
+
+```{r}
+# Intercept-only model
+null_model <- lm(Y ~ 1, data = data)
+
+# Forward stepwise AIC
+AIC_model <- stepAIC(null_model, 
+                     scope = list(upper = full_model, lower = null_model), 
+                     direction = "forward")
+```
+
+The output above shows the process of the forward stepwise AIC. We can prevent this from printing by setting trace = FALSE as an argument in stepAIC(). We can check the final decision by printing AIC_model. As we can see below, stepAIC chose the correct model.  
+
+```{r}
+AIC_model
+```  
+  
+## Assessing the prediction performance of the two models
+Next we will choose a model based on predictive performance for new data. We will start by using 10-fold cross-validation.  
+
+### Cross-validation
+10-fold CV involves taking the data and randomly splitting it into 10 groups. We fit 10 models, each using 90% of the data; then, we use these models to predict Y for the remaining 10% of the data. Each time, we calculate the RMSE (a measure of how much the predicted values differ from the true values), and average these 10 RMSEs to get an RMSE for the whole dataset. Smaller RMSE is better because it means that out of sample prediction is more accurate.    
+
+**NOTE:** Because CV splits the data into ten groups randomly, we need to set the seed to reproduce the results we get. Because random sampling occurs differently in the caret package compared to my code, we get slightly different numbers.   
+
+First, we do this by hand to gain understanding of what's going on:   
+```{r}
+set.seed(333)
+
+# BY HAND METHOD:  
+# COMMENT THIS CODE!
+grp_IDs <- sample(c(1:n), n)
+RMSEs_true <- RMSEs_full <- rep(NA, 10)
+tn <- seq(from=0, to=n, by=n/10)
+for(i in 1:10){
+  train <- data[grp_IDs[-c((tn[i]+1):(tn[i+1]))],]
+  valid <- data[grp_IDs[c((tn[i]+1):(tn[i+1]))],]
+  fullmod <- lm(Y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8, data = train)
+  truemod <- lm(Y ~ X1 + X2 + X3 + X4, data = train)
+  predfull <- predict(fullmod, newdata=valid[,1:8])
+  predtrue <- predict(truemod, newdata=valid[,1:4])
+  RMSEs_full[i] = sqrt(mean((predfull - valid$Y)^2))
+  RMSEs_true[i] = sqrt(mean((predtrue - valid$Y)^2))
+}
+
+paste("The full model RMSE by CV is", mean(RMSEs_full))
+paste("The true model RMSE by CV is", mean(RMSEs_true))
+```
+    
+Now we do the same thing but with functions in the caret package  
+```{r}
+set.seed(333)
+
+# Save a setting of CV that specifies 10 groups
+train.control <- trainControl(method = "cv", number = 10)
+
+# Run CV on true model
+true_cv <- train(formula(true_model), data = data, method = "lm",
+                 trControl = train.control)
+
+# Run CV on full model
+full_cv <- train(formula(full_model), data = data, method = "lm",
+                trControl = train.control)
+
+# Pull RMSE from CV results of each model
+paste("The full model RMSE by CV is", as.numeric(full_cv$results["RMSE"]))
+paste("The true model RMSE by CV is", as.numeric(true_cv$results["RMSE"]))
+```  
+    
+These RMSE values are really close, but generally the smaller value indicates better performance, the true model did better than the full model.  
+  
+
+### PRMSE from validation set  
+
+#### Split the data into training and validation sets
+We split our data into a training/testing set (to build potential models) and a validation set (to be used for out-of-sample predictions to obtain a PRMSE).  
+
+```{r}
+IDS <- sample(c(1:500), 150)
+
+# Leave the last 150 observations out as the validation set
+data_valid <- data[IDS, ]
+
+# Use the first 350 observations as the training/testing set
+data_train <- data[-IDS, ]
+
+# Re-save full and true models, but fit them only using the training data
+full_model <- lm(Y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8, data = data_train)
+true_model <- lm(Y ~ X1 + X2 + X3 + X4, data = data_train)
+```
+  
+Now, we will predict the Y outcomes for the validation data using the model fit with the training data. We check how well each model predicted Y by comparing the predicted Y's to the actual Y's via predicted root mean squared error (PRMSE).  
+
+```{r}
+# Predict validation set Y's for full model
+predY_full <- predict(full_model, newdata = data_valid)
+
+# Predict validation set Y's for true model
+predY_true <- predict(true_model, newdata = data_valid)
+
+# PRMSE for full_model
+paste("The full model PRMSE on the validation set is", sqrt(mean((predY_full - data_valid$Y)^2)))
+
+# PRMSE for true_model
+paste("The true model PRMSE on the validation set is", sqrt(mean((predY_true - data_valid$Y)^2)))
+```
+
+Again, the results are close, but again the true model appears to perform a little better than the full model.  
+
+  
+## Question to think about  
+1. Under what conditions do these methods choose the true model? Can you change the code above so that at least one method chooses the full model over the true model?   
+
+
